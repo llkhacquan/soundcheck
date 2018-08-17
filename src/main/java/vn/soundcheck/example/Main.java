@@ -1,3 +1,5 @@
+package vn.soundcheck.example;
+
 import org.bytedeco.javacpp.tesseract;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,16 +1,18 @@
 package vn.soundcheck.example;
 
-import org.bytedeco.javacpp.tesseract;
+import org.bytedeco.javacpp.*;
+import org.bytedeco.javacv.OpenCVFrameConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
+
+import static org.bytedeco.javacpp.lept.pixDestroy;
+import static org.bytedeco.javacpp.lept.pixRead;
+import static org.bytedeco.javacpp.tesseract.PSM_SINGLE_BLOCK;
+import static org.bytedeco.javacpp.tesseract.TessBaseAPI;
 
 public class Main {
 
@@ -19,34 +21,38 @@ public class Main {
 	private final static File tempDir = new File(System.getProperty("java.io.tmpdir"));
 
 	public static void main(String args[]) {
-		tesseract.TessBaseAPI api = new tesseract.TessBaseAPI();
-		if (api.Init(".", "vie", 1) != 0) {
+		TessBaseAPI baseAPI = new TessBaseAPI();
+		if (baseAPI.Init(".", "vie", 1) != 0) {
 			System.err.println("Could not initialize tesseract.");
 			System.exit(1);
 		}
+		OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
+		baseAPI.SetPageSegMode(PSM_SINGLE_BLOCK);
 		Arrays.stream(Objects.requireNonNull(resourcesFolder.listFiles((dir, name) -> name.endsWith(".jpg")))).forEach(f -> {
-			try {
-				File temp = new File(tempDir, "hash." + String.valueOf(f.getAbsolutePath().hashCode()));
-				String cmd = "tesseract " + f.getAbsolutePath() + " " + temp.getAbsolutePath() + " -l vie";
-				execute(cmd);
-				temp = new File(temp.getParent(), temp.getName() + ".txt");
-				List<String> lines = Files.readAllLines(temp.toPath());
-				List<String> collect = lines.stream().map(String::trim).filter(s -> s.length() > 0).collect(Collectors.toList());
-				if (collect.size() == 0) {
-					return;
-				}
-				System.out.println(f + " " + new String(Files.readAllBytes(temp.toPath())));
-			} catch (IOException | InterruptedException e) {
-				e.printStackTrace();
-			}
-		});
-	}
+			// String absolutePath = new File(resourcesFolder, "1.jpg").getAbsolutePath();
+			opencv_core.Mat imread = opencv_imgcodecs.imread(f.getAbsolutePath());
+			opencv_core.CvArr cvArr = new opencv_core.CvMat(imread);
+			opencv_highgui.cvvShowImage("origin - " + f.getName(), cvArr);
 
-	private static String execute(String cmd) throws InterruptedException, IOException {
-		LOG.debug("Execute: " + cmd);
-		Runtime run = Runtime.getRuntime();
-		Process pr = run.exec(cmd);
-		pr.waitFor();
-		return "";
+			lept.PIX image = pixRead(f.getAbsolutePath());
+			BytePointer outputText;
+			baseAPI.SetImage(image);
+			int h = image.h();
+			int w = image.w();
+			{
+				baseAPI.SetRectangle((int) (w * 0.1), (int) (h * 0.23), (int) (w * 0.8), (int) (h * 0.14));
+				outputText = baseAPI.GetUTF8Text();
+				System.out.println(outputText.getString());
+				outputText.deallocate();
+
+				baseAPI.SetRectangle((int) (w * 0.1), (int) (h * 0.38), (int) (w * 0.8), (int) (h * 0.05));
+				outputText = baseAPI.GetUTF8Text();
+				System.out.println(outputText.getString());
+				outputText.deallocate();
+			}
+
+			pixDestroy(image);
+		});
+		baseAPI.End();
 	}
 }

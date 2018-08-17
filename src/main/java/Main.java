@@ -1,3 +1,4 @@
+import org.bytedeco.javacpp.tesseract;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -15,8 +16,12 @@ public class Main {
 	private final static File resourcesFolder = new File("src/main/resources");
 	private final static File tempDir = new File(System.getProperty("java.io.tmpdir"));
 
-
 	public static void main(String args[]) {
+		tesseract.TessBaseAPI api = new tesseract.TessBaseAPI();
+		if (api.Init(".", "vie", 1) != 0) {
+			System.err.println("Could not initialize tesseract.");
+			System.exit(1);
+		}
 		Arrays.stream(Objects.requireNonNull(resourcesFolder.listFiles((dir, name) -> name.endsWith(".jpg")))).forEach(f -> {
 			try {
 				File temp = new File(tempDir, "hash." + String.valueOf(f.getAbsolutePath().hashCode()));

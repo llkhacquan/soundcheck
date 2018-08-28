@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 import static org.bytedeco.javacpp.lept.pixDestroy;
@@ -19,7 +20,7 @@ public class Main {
 	private final static File resourcesFolder = new File("src/main/resources");
 	private final static File tempDir = new File(System.getProperty("java.io.tmpdir"));
 
-	public static void main(String args[]) throws InterruptedException {
+	public static void main(String args[]) throws InterruptedException, IOException {
 		TessBaseAPI baseAPI = new TessBaseAPI();
 		if (baseAPI.Init(".", "vie", 1) != 0) {
 			System.err.println("Could not initialize tesseract.");
@@ -27,9 +28,9 @@ public class Main {
 		}
 		OpenCVFrameConverter.ToMat converter = new OpenCVFrameConverter.ToMat();
 		CanvasFrame originFrame = new CanvasFrame("Origin");
-		File[] files = Objects.requireNonNull(resourcesFolder.listFiles((dir, name) -> name.endsWith(".jpg")));
+		File[] files = Objects.requireNonNull(resourcesFolder.listFiles((dir, name) -> name.endsWith(".jpg") || name.endsWith(".png")));
+		final opencv_core.Scalar whiteColor = new opencv_core.Scalar(-1, -1, -1, 0);
 		for (File f : files) {
-			// String absolutePath = new File(resourcesFolder, "1.jpg").getAbsolutePath();
 			opencv_core.Mat originBW = opencv_imgcodecs.imread(f.getAbsolutePath(), opencv_imgcodecs.IMREAD_GRAYSCALE);
 			int w = originBW.cols();
 			int h = originBW.rows();
@@ -63,6 +64,7 @@ public class Main {
 
 			lept.PIX image = lept.pixRead(f.getAbsolutePath());
 			baseAPI.SetImage(image);
+			baseAPI.SetSourceResolution((int) Math.sqrt(image.h() * image.w() / 2.3 / 4.1));
 			List<Gap> gapList = new ArrayList<>();
 			for (int i = 0; i < 4; i++) {
 				gapList.add(queue.poll());
@@ -76,14 +78,18 @@ public class Main {
 				} else {
 					rect = new opencv_core.Rect((int) (w * 0.2), gap.start + 5, (int) (w * 0.6), gap.end - gap.start - 5);
 				}
-				opencv_imgproc.rectangle(originBW, rect, new opencv_core.Scalar(-1, -1, -1, 0), 2, 0, 0);
+				opencv_imgproc.rectangle(originBW, rect, whiteColor, 2, 0, 0);
 				String text = extractText(baseAPI, rect, i == 0);
 				System.out.println(text);
+				rect.close();
 			}
 			pixDestroy(image);
 			originFrame.showImage(converter.convert(originBW));
 			originFrame.waitKey();
+			horizontal.close();
+			originBW.close();
 		}
+		whiteColor.close();
 		originFrame.dispose();
 		baseAPI.End();
 		baseAPI.close();
